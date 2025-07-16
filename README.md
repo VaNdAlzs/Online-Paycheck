@@ -1,84 +1,102 @@
-# 📄 Script: Online Paycheck Bonus (FiveM ESX)
+# Online Paycheck Script (FiveM / ESX)
 
-Este script recompensa jogadores ativos no servidor com um pagamento automático, que aumenta conforme o tempo online sem estar AFK.
+## Descrição
 
-## 🚀 Descrição Geral
+Este script implementa um sistema de pagamento automático baseado no tempo de atividade online dos jogadores em servidores FiveM com framework ESX. O pagamento é proporcional ao tempo em que o jogador está ativo (não AFK), com bônus para tempo contínuo online.
 
-* Jogadores recebem um **salário base** e um **bônus extra** proporcional ao tempo online.
-* O tempo AFK é descontado do tempo total.
-* Os pagamentos são realizados automaticamente a cada X segundos.
-* O tempo total ativo do jogador é salvo numa base de dados.
-* O tempo é **resetado diariamente às 04:00** para manter o sistema limpo.
+### Funcionalidades principais:
 
-## ⚙️ Configurações Principais
-
-```lua
-SALARIO_BASE = 1000
-BONUS_POR_INTERVALO = 100
-INTERVALO_BONUS = 60 -- em segundos
-BONUS_MAXIMO = 500
-TEMPO_PAGAMENTO = 60 -- em segundos
-TEMPO_AFk_LIMITE = 120 -- em segundos
-```
+- Registra o tempo ativo de cada jogador usando identificador único (license ou steam).
+- Detecta e desconta tempo AFK (sem movimento).
+- Realiza pagamentos automáticos periódicos na conta bancária do jogador.
+- Bônus por tempo ativo contínuo dentro de intervalos configuráveis.
+- Reset diário do tempo acumulado.
+- Persistência dos dados no banco de dados MySQL para manter histórico entre sessões.
+- Comunicação eficiente entre client e server para atualização de movimento.
+- Proteções básicas contra spam de eventos e jogadores tentando "farmar" parados.
 
 ---
 
-## 🔧 Funções e Componentes
+## Configurações ajustáveis
 
-### `getIdentifier(src)`
-
-Procura o identificador exclusivo do jogador (Steam ou License).
-
-### `esx:playerLoaded`
-
-Evento chamado quando o jogador entra no servidor. Inicializa o  tempo ativo e puxa da base de dados o tempo anterior.
-
-### `playerDropped`
-
-Ao sair, o tempo ativo é salvo na base de dados, reduzindo o tempo AFK.
-
-### `online_paycheck:atualizarMovimento`
-
-Chamado pelo client. Verifica se o jogador está em movimento e, se não estiver, acumula tempo AFK.
-
-### `Thread de pagamento`
-
-A cada `TEMPO_PAGAMENTO`, verifica o tempo ativo e calcula:
-
-* Salário total (base + bônus)
-* Adiciona ao banco do jogador (ESX)
-* Envia notificação com `okokNotify`
-* Atualiza o tempo ativo na base de dados
-
-### `Thread de reset diário`
-
-Todos os dias às 04:00 da manhã, zera o tempo total ativo de todos os jogadores na base de dados.
+| Variável           | Descrição                                | Valor padrão       |
+|--------------------|------------------------------------------|--------------------|
+| `SALARIO_BASE`     | Valor base do salário a cada pagamento  | 5000               |
+| `BONUS_POR_INTERVALO` | Bônus ganho a cada intervalo ativo      | 100                |
+| `INTERVALO_BONUS`  | Intervalo de tempo em segundos para bônus | 60                 |
+| `BONUS_MAXIMO`     | Valor máximo do bônus por ciclo         | 500                |
+| `TEMPO_PAGAMENTO`  | Intervalo entre pagamentos em segundos  | 300 (5 minutos)    |
+| `TEMPO_AFk_LIMITE` | Tempo limite para considerar jogador AFK | 120 (2 minutos)    |
 
 ---
 
-## 📝 Melhorias Futuras se for o caso !
+## Melhorias implementadas
 
-| Item                             | Descrição                                                                 |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| Detecção de AFK mais precisa     | Monitorar movimento da câmera/mouse e animações, não apenas teclas.       |
-| Proteção contra crash exploit    | Registrar tempo parciais com mais frequência ou salvamento intermediário. |
-| Comando admin                    | Criar comando `/resettempo` ou `/checktempo` para gestão e suporte.       |
-| Logs em ficheiro                 | Armazenar logs locais com `SaveResourceFile` para auditoria.              |
-| Otimização para muitos jogadores | Em servidores grandes, dividir o processamento em blocos para evitar lag. |
+1. **Anti-spam e controle de frequência**  
+   - No client e server, evento de atualização de movimento é limitado a no mínimo 5 segundos entre chamadas para evitar flood.
+
+2. **Persistência robusta e inicialização assíncrona**  
+   - Busca e cria registros no banco se necessário ao entrar no servidor, usando async/await para garantir sincronização correta.
+
+3. **Detecção aprimorada de AFK**  
+   - Thread dedicada verifica periodicamente se o jogador está parado e soma o tempo AFK, descontando do pagamento.
+
+4. **Atualização segura do banco ao desconectar e pagar**  
+   - Atualiza o tempo ativo no banco ao desconectar e a cada ciclo de pagamento, garantindo integridade dos dados.
+
+5. **Resets diários automáticos**  
+   - Reset do tempo acumulado às 4h da manhã para manter dados atualizados e evitar acumulação infinita.
+
+6. **Melhoria na lógica de pagamento**  
+   - Cálculo de bônus baseado em tempo ativo real com teto máximo, adicionando transparência e equilíbrio.
+
+7. **Client otimizado**  
+   - Client detecta movimentação do jogador a cada 5 segundos e envia evento somente quando detecta teclas de movimento pressionadas, sincronizando perfeitamente com o servidor.
 
 ---
 
-## 📂 SQL Necessária
+## Sugestões para futuros updates
 
+- **Validação mais robusta no servidor**  
+  Validar padrões de movimento para evitar que jogadores burlem o sistema enviando eventos manualmente.
+
+- **Pagamento máximo diário**  
+  Definir um teto máximo de salário pago por dia para evitar abusos em longas sessões.
+
+- **Salvamento periódico no banco**  
+  Salvar o tempo ativo em intervalos regulares para minimizar perda em quedas inesperadas.
+
+- **Batch update no banco**  
+  Fazer atualizações agrupadas para melhorar desempenho em servidores com muitos jogadores.
+
+- **Melhoria na identificação do jogador**  
+  Suporte a múltiplos identificadores e verificação anti-fraude para evitar spoofing.
+
+- **Interface administrativa**  
+  Comandos para verificar tempo online, saldo acumulado e forçar resets.
+
+- **Eventos customizados e logs**  
+  Logs detalhados para auditoria, detecção de anomalias e suporte a moderação.
+
+---
+
+## Considerações finais
+
+Este script oferece uma base sólida para sistemas de pagamento baseados em tempo online ativo em servidores ESX, com bom equilíbrio entre desempenho, segurança e usabilidade. Pode ser ampliado e adaptado conforme a necessidade do servidor e a complexidade desejada.
+
+---
+
+## Instalação
+
+1. Coloque os arquivos do script em sua pasta `resources`.
+2. Adicione `start online_paycheck` no seu `server.cfg`.
+3. Configure as tabelas necessárias no banco MySQL:
 ```sql
 CREATE TABLE IF NOT EXISTS player_online_time (
     identifier VARCHAR(50) PRIMARY KEY,
-    total_active_seconds INT DEFAULT 0
+    total_active_seconds BIGINT DEFAULT 0,
+    last_reset DATE DEFAULT NULL
 );
-```
 
-> ✉️ Nota: O script é compatível com ESX e usa MySQL async/oxmysql.
-
----
 
 **Autor**: VaNdAl
